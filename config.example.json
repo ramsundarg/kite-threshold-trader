@@ -1,0 +1,25 @@
+{
+  "product": "MIS",
+  "poll_seconds": 5,
+  "limit_buffer_pct": 0.5,
+  "market_open": "09:15",
+  "entry_cutoff": "15:00",
+  "squareoff_time": "15:15",
+  "rules": [
+    {
+      "symbol": "NSE:INFY",
+      "buy_below": 1400.0,
+      "sell_above": 1550.0,
+      "quantity": 5,
+      "stop_loss_pct": 5.0,
+      "take_profit_pct": 15.0,
+      "allow_short": false
+    },
+    {
+      "symbol": "NSE:TCS",
+      "buy_below": 3000.0,
+      "sell_above": 3300.0,
+      "quantity": 2
+    }
+  ]
+}

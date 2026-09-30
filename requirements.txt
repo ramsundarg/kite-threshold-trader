@@ -1,0 +1,2 @@
+kiteconnect>=5.0
+tzdata  # needed on Windows for Asia/Kolkata timezone

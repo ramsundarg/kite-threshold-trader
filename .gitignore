@@ -1,0 +1,5 @@
+.kite_session.json
+config.json
+.venv/
+__pycache__/
+*.log
