@@ -1,0 +1,18 @@
+{
+  "poll_seconds": 60,
+  "order_timeout_seconds": 30,
+  "market_open": "09:20",
+  "market_close": "15:25",
+  "rules": [
+    {
+      "underlying": "NSE:INFY",
+      "lots": 1,
+      "otm_pct": 5.0,
+      "min_days_to_expiry": 20,
+      "max_days_to_expiry": 60,
+      "roll_days_before_expiry": 5,
+      "take_profit_pct": 80.0,
+      "stock_stop_loss_pct": 5.0
+    }
+  ]
+}

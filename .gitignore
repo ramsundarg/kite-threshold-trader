@@ -3,3 +3,5 @@ config.json
 .venv/
 __pycache__/
 *.log
+covered_call.json
+.cc_premiums.json

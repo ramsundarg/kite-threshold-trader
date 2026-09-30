@@ -1,7 +1,12 @@
 # Threshold trader for Zerodha Kite
 
 A small bot built on the official Zerodha library [pykiteconnect](https://github.com/zerodha/pykiteconnect).
-For each stock in `config.json` it applies these rules:
+It contains two strategies:
+
+- **Threshold trader** (`trader.py`, settings in `config.json`), described below.
+- **Covered calls** (`cc_trader.py`, settings in `covered_call.json`). See [section 4](#4-covered-call-strategy-cc_traderpy).
+
+For each stock in `config.json`, the threshold trader applies these rules:
 
 | Situation | Action |
 |---|---|
@@ -197,6 +202,72 @@ DigitalOcean (Bangalore), Azure or Google Cloud (Mumbai) work the same way.
 
 ---
 
+## 4. Covered-call strategy (`cc_trader.py`)
+
+A **covered call** means you hold shares of a stock and sell (write) a call option on
+them each month. You keep the premium as income. In exchange, you give up gains above
+the strike: if the stock ends above the strike at expiry, your shares are sold at that price.
+
+### What the bot does, per stock in `covered_call.json`
+
+| Situation | Action |
+|---|---|
+| You hold ≥ 1 lot of shares and no call is written | **Sell** the call with the nearest expiry that is ≥ `min_days_to_expiry` days away, at the lowest strike ≥ spot + `otm_pct` % |
+| The call has lost `take_profit_pct` % of its value (e.g. sold at ₹20, now ₹4) | **Buy it back** and write a fresh one on the next cycle |
+| ≤ `roll_days_before_expiry` days to expiry | **Buy it back** (roll). The next cycle writes the next month's call |
+| The stock is down `stock_stop_loss_pct` % from your average price | **Buy back the call first, then sell the covered shares**, then stop managing that stock |
+| You hold fewer shares than the calls you have written | **Buy back** the uncovered part, so the bot is never naked short |
+
+Orders are LIMIT orders at the best bid (when selling) or best offer (when buying).
+Any order not filled within `order_timeout_seconds` is cancelled and re-decided at the
+new price. After a rejection (usually margin), the bot waits 15 minutes before trying again.
+The premium you actually received is recorded in `.cc_premiums.json`, which the take-profit rule uses.
+
+### Before you start: requirements
+
+- **Only F&O stocks**, and only in **whole lots**. Lot sizes are several hundred shares
+  (check the lot size on NSE or in Kite's option chain), so one lot of a ₹1,500 stock is ~₹5–6 lakh
+  of shares. With fewer than one lot, the bot does nothing.
+- The shares must be in your **Holdings** (bought as CNC). The bot never buys shares for this strategy.
+- **Margin.** Selling a call needs F&O margin even though you hold the shares. Pledge the shares
+  (Kite → Holdings → the stock → *Pledge*) to use them as collateral. SEBI also requires part of the
+  option-selling margin to be in cash, so keep some cash in the account. Kite shows the margin
+  needed when you place an order.
+- **F&O must be enabled** on your Zerodha account (Console → Segments).
+- **Physical settlement.** Stock options in India settle by delivering shares. If a written call is
+  in the money at expiry, your shares are handed over at the strike. That is the intended
+  covered-call outcome, but rolling 5 days before expiry (the default) usually avoids it. Zerodha
+  also asks for higher margin in expiry week.
+
+### Settings (`covered_call.json`)
+
+```json
+{ "underlying": "NSE:INFY", "lots": 1, "otm_pct": 5.0,
+  "min_days_to_expiry": 20, "max_days_to_expiry": 60, "roll_days_before_expiry": 5,
+  "take_profit_pct": 80.0, "stock_stop_loss_pct": 5.0 }
+```
+
+`"stock_stop_loss_pct": null` turns the stock stop off. With the stop off, the bot just keeps
+writing calls against shares you plan to hold anyway, which is the classic covered call.
+
+### Run it
+
+1. **`run_cc_demo.bat`** simulates one year with made-up prices and option prices from a
+   Black-Scholes model. It prints every order and compares the result with simply holding
+   the shares. Try other price paths with
+   `.venv\Scripts\python cc_trader.py --demo --seed 3`.
+   On these simulated paths, a 5 % stock stop usually triggers within a few weeks, so choose it deliberately.
+2. `login.bat`, then **`run_cc_paper.bat`**: live data. It only *logs* the orders it would send,
+   in `cc_trader.log`. Nothing reaches Zerodha. In paper mode it logs the same intended
+   order again every minute. That is expected.
+3. **`run_cc_live.bat`**: real orders. On the cloud server, use this cron line:
+   `20 9 * * 1-5 cd ~/kite_threshold_trader && . ~/.kite_env && .venv/bin/python cc_trader.py --live >> cc_trader.log 2>&1`
+
+One run of `cc_trader.py` a day is enough. Options expire on a monthly cycle, and the bot
+checks every 60 s during market hours.
+
+---
+
 ## Files
 
 | File | What it does |
@@ -206,7 +277,9 @@ DigitalOcean (Bangalore), Azure or Google Cloud (Mumbai) work the same way.
 | `trader.py` | Main loop: market hours, pending-order guard, MIS square-off. |
 | `login.py` | Daily login, saves the token to `.kite_session.json`. |
 | `gtt_setup.py` | Places the same rules as server-side GTT orders. |
-| `test_strategy.py` | Self-tests (`python -m unittest test_strategy`). |
+| `covered_call.py` | The covered-call rules (write / roll / take-profit / stop-loss). Pure logic. |
+| `cc_trader.py` | Covered-call runner: live Kite, paper, and an offline Black-Scholes demo. |
+| `test_strategy.py`, `test_covered_call.py` | Self-tests (`python -m unittest test_strategy test_covered_call`). |
 | `*.bat` | Windows double-click launchers. |
 
 Never share `.kite_session.json` or your API secret. Anyone who has them can trade your account.
